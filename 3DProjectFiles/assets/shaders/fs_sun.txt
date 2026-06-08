@@ -1,0 +1,20 @@
+#version 330 core
+
+in vec2 aTexCoord;
+out vec4 fragColor;
+
+uniform vec3 sunColor;
+uniform float emissionStrength;
+uniform float glowStrength;
+uniform float glowRadius;
+
+void main() {
+
+    vec3 color = sunColor * emissionStrength;
+    float dist = length(aTexCoord - vec2(0.5));
+    float glow = exp(-dist * glowRadius) * glowStrength;
+
+    color += sunColor * glow;
+
+    fragColor = vec4(color, 1.0);
+}

@@ -1,0 +1,110 @@
+#version 330 core
+
+in vec3 aPos;
+in vec3 aNormal;
+in vec2 aTexCoord;
+in vec3 vLocalPos;
+
+out vec4 fragColor;
+
+uniform vec3 viewPos;
+uniform int isBeeBody;
+uniform int isWall;
+uniform int useTexture;
+
+uniform sampler2D diffuse_texture;
+uniform sampler2D overlay_texture;
+uniform float overlay_alpha;
+
+struct Light {
+    vec3 position;
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    vec3 direction;
+    float cutOff;
+    float outerCutOff;
+    int isSpotlight;
+};
+
+uniform Light lights[10];
+uniform int numLights;
+
+struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+uniform Material material;
+
+void main()
+{
+    // SAFETY MINIMUM LIGHT (to prevent black screens)
+    vec3 result = vec3(0.2);
+
+    vec3 baseColor = (useTexture == 1)
+        ? texture(diffuse_texture, aTexCoord).rgb
+        : material.diffuse;
+
+    if (isWall == 1) {
+    vec3 baseTex = texture(diffuse_texture, aTexCoord).rgb;
+    vec3 overTex = texture(overlay_texture, aTexCoord).rgb;
+    float a = clamp(overlay_alpha, 0.0, 1.0);
+    vec3 finalColor = mix(baseTex, overTex, a);
+
+    fragColor = vec4(finalColor, 1.0);
+    return;
+}
+
+    if (isBeeBody == 1) {
+        float repeat = 5.0;
+        float band = floor(vLocalPos.x * repeat);
+
+        if (mod(band, 2.0) == 0.0)
+            baseColor = vec3(1.0, 0.9, 0.0);
+        else
+            baseColor = vec3(0.05, 0.05, 0.05);
+    }
+
+    vec3 norm    = normalize(aNormal);
+    vec3 viewDir = normalize(viewPos - aPos);
+
+    for (int i = 0; i < numLights; ++i)
+    {
+        Light light = lights[i];
+
+        vec3 lightDir = (light.isSpotlight == 1)
+            ? normalize(light.position - aPos)
+            : normalize(-light.direction);
+
+        float diff = (i == 0)
+            ? 1.0
+            : max(dot(norm, lightDir), 0.0);
+
+        vec3 reflectDir = reflect(-lightDir, norm);
+
+        float spec = 0.0;
+        if (diff > 0.0) {
+            float rv = max(dot(viewDir, reflectDir), 0.0);
+            spec = pow(rv, material.shininess);
+        }
+
+        float intensity = 1.0;
+        if (light.isSpotlight == 1) {
+            vec3 spotDir = normalize(-lightDir);
+            float theta = dot(spotDir, normalize(light.direction));
+            float epsilon = max(light.cutOff - light.outerCutOff, 0.0001);
+            intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+        }
+
+        vec3 ambient  = light.ambient  * material.ambient;
+        vec3 diffuse  = light.diffuse  * diff * material.diffuse;
+        vec3 specular = light.specular * spec * material.specular;
+
+        result += ambient + intensity * (diffuse + specular);
+    }
+
+    fragColor = vec4(baseColor * result, 1.0);
+}

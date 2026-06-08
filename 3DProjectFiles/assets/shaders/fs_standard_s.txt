@@ -1,0 +1,96 @@
+#version 330 core
+
+in vec3 aPos;
+in vec3 aNormal;
+in vec2 aTexCoord;
+
+out vec4 fragColor;
+
+uniform vec3 viewPos;
+
+uniform sampler2D diffuse_texture;
+uniform sampler2D specular_texture;
+
+uniform int isBeeBody;
+
+struct Light {
+  vec3 position;
+  vec3 ambient;
+  vec3 diffuse;
+  vec3 specular;
+};
+
+uniform Light light;
+
+struct Material {
+  vec3 ambient;
+  vec3 diffuse;
+  vec3 specular;
+  float shininess;
+};
+
+uniform Material material;
+
+void main() {
+
+  // -----------------------
+  // AMBIENT
+  // -----------------------
+  vec3 ambient = light.ambient * material.ambient;
+
+  // -----------------------
+  // NORMAL + LIGHT DIR
+  // -----------------------
+  vec3 norm = normalize(aNormal);
+  vec3 lightDir = normalize(light.position - aPos);
+  float diff = max(dot(norm, lightDir), 0.0);
+
+  // -----------------------
+  // DIFFUSE COLOR BASE
+  // -----------------------
+  vec3 diffuseColor = material.diffuse;
+
+  // ============================================================
+  //            BEE BODY STRIPES (procedural)
+  // ============================================================
+  if (isBeeBody == 1) {
+
+      float stripeScale = 12.0;
+      float s = aPos.x * stripeScale;
+
+      if (int(floor(s)) % 2 == 0)
+          diffuseColor = vec3(1.0, 0.85, 0.1);   // yellow
+      else
+          diffuseColor = vec3(0.05, 0.05, 0.05); // black
+  }
+
+  // -----------------------
+  // DIFFUSE LIGHTING
+  // -----------------------
+  vec3 diffuse = light.diffuse * (diff * diffuseColor);
+
+  // ============================================================
+  //                  SAFE SPECULAR SHADING
+  //    prevents statues from inheriting bee's specular texture
+  // ============================================================
+
+  vec3 sampledSpec = vec3(texture(specular_texture, aTexCoord));
+
+  // If the object has no specular map, OpenGL may return zeros,
+  // so we fall back to material specular to avoid artifacts.
+  if (length(sampledSpec) < 0.001) {
+      sampledSpec = material.specular;
+  }
+
+  vec3 viewDir = normalize(viewPos - aPos);
+  vec3 reflectDir = reflect(-lightDir, norm);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+
+  vec3 specular = light.specular * spec * sampledSpec;
+
+  // -----------------------
+  // FINAL COLOR
+  // -----------------------
+  vec3 result = ambient + diffuse + specular;
+  fragColor = vec4(result, 1.0);
+}

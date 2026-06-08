@@ -1,0 +1,84 @@
+#version 330 core
+
+in vec3 aPos;
+in vec3 aNormal;
+in vec2 aTexCoord;
+
+out vec4 fragColor;
+
+uniform vec3 viewPos;
+
+// we still keep these so the same Shader/Renderer path works
+uniform sampler2D specular_texture;
+
+struct Light {
+  vec3 position;
+  vec3 ambient;
+  vec3 diffuse;
+  vec3 specular;
+};
+
+uniform Light light;
+
+struct Material {
+  vec3 ambient;
+  vec3 diffuse;
+  vec3 specular;
+  float shininess;
+};
+
+uniform Material material;
+
+void main() {
+
+  // -----------------------
+  // AMBIENT
+  // -----------------------
+  vec3 ambient = light.ambient * material.ambient;
+
+  // -----------------------
+  // NORMAL + LIGHT DIR
+  // -----------------------
+  vec3 norm = normalize(aNormal);
+  vec3 lightDir = normalize(light.position - aPos);
+  float diff = max(dot(norm, lightDir), 0.0);
+
+  // ============================================================
+  //            ALWAYS STRIPED DIFFUSE FOR THIS SHADER
+  //           (this shader is used ONLY for bee body)
+  // ============================================================
+
+  // base color (will be overridden by stripes)
+  vec3 diffuseColor = material.diffuse;
+
+  // Stripe logic exactly like before
+  float stripeScale = 12.0;
+  float s = aPos.x * stripeScale;
+
+  if (int(floor(s)) % 2 == 0)
+      diffuseColor = vec3(1.0, 0.85, 0.1);   // yellow
+  else
+      diffuseColor = vec3(0.05, 0.05, 0.05); // black
+
+  vec3 diffuse = light.diffuse * (diff * diffuseColor);
+
+  // -----------------------
+  // SPECULAR (safe fallback)
+  // -----------------------
+  vec3 sampledSpec = vec3(texture(specular_texture, aTexCoord));
+  if (length(sampledSpec) < 0.001) {
+      sampledSpec = material.specular;
+  }
+
+  vec3 viewDir = normalize(viewPos - aPos);
+  vec3 reflectDir = reflect(-lightDir, norm);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+
+  vec3 specular = light.specular * spec * sampledSpec;
+
+  // -----------------------
+  // FINAL COLOR
+  // -----------------------
+  vec3 result = ambient + diffuse + specular;
+  fragColor = vec4(result, 1.0);
+}
